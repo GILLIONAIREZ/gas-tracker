@@ -19,7 +19,6 @@
     h1 { font-size: 20px; margin-bottom: 4px; }
     .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
 
-    /* Current price card */
     .card {
       background: #1a1a1a;
       border-radius: 12px;
@@ -33,19 +32,10 @@
       line-height: 1;
     }
     .price-date { color: #888; font-size: 13px; margin-top: 6px; }
-    .change-row {
-      display: flex;
-      gap: 12px;
-      margin-top: 16px;
-      flex-wrap: wrap;
-    }
+    .change-row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
     .change-chip {
-      background: #2a2a2a;
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 13px;
-      flex: 1;
-      min-width: 120px;
+      background: #2a2a2a; border-radius: 8px; padding: 8px 12px;
+      font-size: 13px; flex: 1; min-width: 120px;
     }
     .change-chip .label { color: #888; font-size: 11px; margin-bottom: 2px; }
     .change-chip .val   { font-weight: 600; }
@@ -53,39 +43,46 @@
     .down { color: #2ecc71; }
     .flat { color: #888; }
 
-    /* Chart */
-    .chart-card {
-      background: #1a1a1a;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
+    .chart-card { background: #1a1a1a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
     .chart-title {
-      font-size: 14px;
-      color: #888;
-      margin-bottom: 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      font-size: 14px; color: #888; margin-bottom: 12px;
+      display: flex; justify-content: space-between; align-items: center;
     }
     .range-btns { display: flex; gap: 6px; }
     .range-btn {
-      background: #2a2a2a;
-      border: none;
-      color: #aaa;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      cursor: pointer;
+      background: #2a2a2a; border: none; color: #aaa;
+      padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
     }
     .range-btn.active { background: #3a3a3a; color: #fff; }
     canvas { width: 100% !important; }
 
-    /* Table */
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th { color: #666; font-weight: 500; text-align: left; padding: 6px 0; border-bottom: 1px solid #2a2a2a; }
     td { padding: 8px 0; border-bottom: 1px solid #1e1e1e; }
     td:last-child { text-align: right; }
+
+    /* Download section */
+    .dl-section { background: #1a1a1a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .dl-title { font-size: 14px; color: #888; margin-bottom: 12px; }
+    .dl-presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .dl-preset-btn {
+      background: #2a2a2a; border: none; color: #ccc;
+      padding: 7px 14px; border-radius: 7px; font-size: 13px; cursor: pointer;
+    }
+    .dl-preset-btn:hover, .dl-preset-btn.active { background: #3a3a3a; color: #fff; }
+    .dl-range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .dl-range label { color: #777; font-size: 12px; }
+    .dl-range input[type=date] {
+      background: #2a2a2a; border: 1px solid #3a3a3a; color: #ddd;
+      padding: 6px 10px; border-radius: 7px; font-size: 13px;
+    }
+    .dl-btn {
+      width: 100%; background: #2980b9; border: none; color: #fff;
+      padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; margin-top: 4px;
+    }
+    .dl-btn:hover { background: #3498db; }
+    #dl-count { color: #666; font-size: 12px; margin-bottom: 8px; text-align: center; }
 
     .loading { color: #666; text-align: center; padding: 40px; }
     .updated { color: #555; font-size: 11px; text-align: center; margin-top: 20px; }
@@ -94,21 +91,21 @@
 <body>
   <h1>⛽ US Gas Price</h1>
   <p class="subtitle">Regular Unleaded · National Average · Source: AAA</p>
-
   <div id="app"><p class="loading">Loading...</p></div>
 
   <script>
   const CSV_URL = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/gas_data.csv';
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
   function parseCSV(text) {
     const lines = text.trim().split('\n');
-    const headers = lines[0].split(',');
+    const headers = lines[0].split(',').map(h => h.trim());
     return lines.slice(1).map(line => {
       const vals = line.split(',');
       const obj = {};
-      headers.forEach((h, i) => obj[h.trim()] = (vals[i] || '').trim());
+      headers.forEach((h, i) => obj[h] = (vals[i] || '').trim());
       return obj;
-    }).filter(r => r.price_date);
+    }).filter(r => r.price_date && r.price_date.trim());
   }
 
   function toNum(s) {
@@ -120,38 +117,63 @@
   function fmtChange(cur, ref) {
     if (cur == null || ref == null) return { text: 'N/A', cls: 'flat' };
     const d = cur - ref;
-    if (Math.abs(d) < 0.0005) return { text: '→ $0.000', cls: 'flat' };
-    const sign = d > 0 ? '+' : '-';
+    if (Math.abs(d) < 0.0005) return { text: '-> $0.000', cls: 'flat' };
     return {
-      text: `${d > 0 ? '▲' : '▼'} ${sign}$${Math.abs(d).toFixed(3)}`,
+      text: (d > 0 ? 'up ' : 'dn ') + (d > 0 ? '+' : '-') + '$' + Math.abs(d).toFixed(3),
+      cls: d > 0 ? 'up' : 'down'
+    };
+  }
+
+  function fmtChangeArrow(cur, ref) {
+    if (cur == null || ref == null) return { text: 'N/A', cls: 'flat' };
+    const d = cur - ref;
+    if (Math.abs(d) < 0.0005) return { text: '\u2192 $0.000', cls: 'flat' };
+    return {
+      text: (d > 0 ? '\u25b2 +' : '\u25bc -') + '$' + Math.abs(d).toFixed(3),
       cls: d > 0 ? 'up' : 'down'
     };
   }
 
   function parseDate(str) {
-    // Handles "3/23/26" and "3/23/2026"
-    const parts = str.split('/');
+    if (!str) return null;
+    const parts = str.trim().split('/');
     if (parts.length !== 3) return null;
     let [m, d, y] = parts.map(Number);
     if (y < 100) y += 2000;
     return new Date(y, m - 1, d);
   }
 
-  let allRows = [];
-  let chart = null;
+  function isoDate(str) {
+    const dt = parseDate(str);
+    if (!dt) return str;
+    return dt.getFullYear() + '-' +
+      String(dt.getMonth() + 1).padStart(2, '0') + '-' +
+      String(dt.getDate()).padStart(2, '0');
+  }
 
-  function buildChart(rows, days) {
-    const subset = days === 'all' ? rows : rows.slice(-days);
-    const labels = subset.map(r => {
-      const dt = parseDate(r.price_date);
-      return dt ? dt.toISOString().split('T')[0] : r.price_date;
+  function sortByDate(rows) {
+    return [...rows].sort((a, b) => {
+      const da = parseDate(a.price_date), db = parseDate(b.price_date);
+      if (!da || !db) return 0;
+      return da - db;
     });
+  }
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let allRows = [];
+  let chart   = null;
+  let dlRows  = [];
+
+  // ── Chart ──────────────────────────────────────────────────────────────────
+  function buildChart(rows, days) {
+    const subset = (days === 'all') ? rows : rows.slice(-Math.min(Number(days), rows.length));
+    const labels = subset.map(r => isoDate(r.price_date));
     const prices = subset.map(r => toNum(r.current));
 
     const ctx = document.getElementById('priceChart');
     if (!ctx) return;
-
     if (chart) chart.destroy();
+
     chart = new Chart(ctx, {
       type: 'line',
       data: {
@@ -161,7 +183,7 @@
           borderColor: '#f39c12',
           backgroundColor: 'rgba(243,156,18,0.08)',
           borderWidth: 2,
-          pointRadius: rows.length > 60 ? 0 : 3,
+          pointRadius: subset.length > 60 ? 0 : 3,
           pointHoverRadius: 5,
           fill: true,
           tension: 0.3
@@ -171,27 +193,16 @@
         responsive: true,
         plugins: {
           legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => `$${ctx.parsed.y.toFixed(3)}`
-            }
-          }
+          tooltip: { callbacks: { label: c => '$' + c.parsed.y.toFixed(3) } }
         },
         scales: {
           x: {
             type: 'category',
-            ticks: {
-              color: '#666',
-              maxTicksLimit: 6,
-              maxRotation: 0
-            },
+            ticks: { color: '#666', maxTicksLimit: 6, maxRotation: 0 },
             grid: { color: '#1e1e1e' }
           },
           y: {
-            ticks: {
-              color: '#666',
-              callback: v => `$${v.toFixed(2)}`
-            },
+            ticks: { color: '#666', callback: v => '$' + v.toFixed(2) },
             grid: { color: '#1e1e1e' }
           }
         }
@@ -205,92 +216,168 @@
     buildChart(allRows, days);
   }
 
+  // ── Download ───────────────────────────────────────────────────────────────
+  function filterByDays(rows, days) {
+    return (days === 'all') ? rows : rows.slice(-Math.min(Number(days), rows.length));
+  }
+
+  function filterByRange(rows, from, to) {
+    const f = from ? new Date(from + 'T00:00:00') : null;
+    const t = to   ? new Date(to   + 'T23:59:59') : null;
+    return rows.filter(r => {
+      const d = parseDate(r.price_date);
+      if (!d) return false;
+      if (f && d < f) return false;
+      if (t && d > t) return false;
+      return true;
+    });
+  }
+
+  function setDownloadRows(rows) {
+    dlRows = rows;
+    const el = document.getElementById('dl-count');
+    if (el) el.textContent = rows.length + ' row' + (rows.length !== 1 ? 's' : '') + ' selected';
+  }
+
+  function selectPreset(days, btn) {
+    document.querySelectorAll('.dl-preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('dl-from').value = '';
+    document.getElementById('dl-to').value   = '';
+    setDownloadRows(filterByDays(allRows, days));
+  }
+
+  function onDateRangeChange() {
+    const from = document.getElementById('dl-from').value;
+    const to   = document.getElementById('dl-to').value;
+    document.querySelectorAll('.dl-preset-btn').forEach(b => b.classList.remove('active'));
+    if (from || to) setDownloadRows(filterByRange(allRows, from, to));
+  }
+
+  function downloadCSV() {
+    if (!dlRows.length) { alert('No rows selected.'); return; }
+    const header = 'date,price,yesterday,week_ago,month_ago,year_ago';
+    const body = dlRows.map(r =>
+      [r.price_date, r.current, r.yesterday, r.week_ago, r.month_ago, r.year_ago].join(',')
+    ).join('\n');
+    const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = 'gas_prices_' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   function render(rows) {
     if (!rows.length) {
       document.getElementById('app').innerHTML = '<p class="loading">No data yet.</p>';
       return;
     }
 
-    const latest = rows[rows.length - 1];
+    // Use most-recent row that has full comparison data for the summary cards
+    const latest = [...rows].reverse().find(r => r.yesterday) || rows[rows.length - 1];
     const cur  = toNum(latest.current);
     const yest = toNum(latest.yesterday);
     const wk   = toNum(latest.week_ago);
     const mo   = toNum(latest.month_ago);
     const yr   = toNum(latest.year_ago);
 
-    const dayChg = fmtChange(cur, yest);
-    const wkChg  = fmtChange(cur, wk);
-    const moChg  = fmtChange(cur, mo);
-    const yrChg  = fmtChange(cur, yr);
+    const dayChg = fmtChangeArrow(cur, yest);
+    const wkChg  = fmtChangeArrow(cur, wk);
+    const moChg  = fmtChangeArrow(cur, mo);
+    const yrChg  = fmtChangeArrow(cur, yr);
 
     function chip(label, ref, chg) {
-      return `<div class="change-chip">
-        <div class="label">${label}</div>
-        <div>${ref != null ? '$' + ref.toFixed(3) : 'N/A'}</div>
-        <div class="val ${chg.cls}">${chg.text}</div>
-      </div>`;
+      return '<div class="change-chip">' +
+        '<div class="label">' + label + '</div>' +
+        '<div>' + (ref != null ? '$' + ref.toFixed(3) : 'N/A') + '</div>' +
+        '<div class="val ' + chg.cls + '">' + chg.text + '</div>' +
+        '</div>';
     }
 
-    // History table (last 10 entries)
-    const recent = [...rows].reverse().slice(0, 10);
-    const tableRows = recent.map(r => {
-      const c = toNum(r.current);
-      const y = toNum(r.yesterday);
-      const chg = fmtChange(c, y);
-      return `<tr>
-        <td>${r.price_date}</td>
-        <td>${c != null ? '$' + c.toFixed(3) : 'N/A'}</td>
-        <td class="${chg.cls}">${chg.text}</td>
-      </tr>`;
+    // History table — last 14 rows, newest first, day-over-day diff
+    const recent = [...rows].reverse().slice(0, 14);
+    const tableRows = recent.map((r, i) => {
+      const c    = toNum(r.current);
+      const prev = toNum(rows[rows.length - 2 - i] ? rows[rows.length - 2 - i].current : null);
+      const chg  = fmtChangeArrow(c, prev);
+      return '<tr>' +
+        '<td>' + r.price_date + '</td>' +
+        '<td>' + (c != null ? '$' + c.toFixed(3) : 'N/A') + '</td>' +
+        '<td class="' + chg.cls + '">' + chg.text + '</td>' +
+        '</tr>';
     }).join('');
 
-    document.getElementById('app').innerHTML = `
-      <div class="card">
-        <div class="price-big ${dayChg.cls}">$${cur != null ? cur.toFixed(3) : 'N/A'}</div>
-        <div class="price-date">as of ${latest.price_date}</div>
-        <div class="change-row">
-          ${chip('vs Yesterday', yest, dayChg)}
-          ${chip('vs 1 Week Ago', wk, wkChg)}
-          ${chip('vs 1 Month Ago', mo, moChg)}
-          ${chip('vs 1 Year Ago', yr, yrChg)}
-        </div>
-      </div>
+    const minDate = isoDate(rows[0].price_date);
+    const maxDate = isoDate(rows[rows.length - 1].price_date);
 
-      <div class="chart-card">
-        <div class="chart-title">
-          <span>Price History</span>
-          <div class="range-btns">
-            <button class="range-btn" onclick="setRange(7,this)">7D</button>
-            <button class="range-btn" onclick="setRange(30,this)">30D</button>
-            <button class="range-btn" onclick="setRange(90,this)">90D</button>
-            <button class="range-btn active" onclick="setRange('all',this)">All</button>
-          </div>
-        </div>
-        <canvas id="priceChart" height="180"></canvas>
-      </div>
+    document.getElementById('app').innerHTML =
+      '<div class="card">' +
+        '<div class="price-big ' + dayChg.cls + '">$' + (cur != null ? cur.toFixed(3) : 'N/A') + '</div>' +
+        '<div class="price-date">as of ' + latest.price_date + '</div>' +
+        '<div class="change-row">' +
+          chip('vs Yesterday', yest, dayChg) +
+          chip('vs 1 Week Ago', wk, wkChg) +
+          chip('vs 1 Month Ago', mo, moChg) +
+          chip('vs 1 Year Ago', yr, yrChg) +
+        '</div>' +
+      '</div>' +
 
-      <div class="card">
-        <table>
-          <tr><th>Date</th><th>Price</th><th style="text-align:right">vs Prev Day</th></tr>
-          ${tableRows}
-        </table>
-      </div>
+      '<div class="chart-card">' +
+        '<div class="chart-title">' +
+          '<span>Price History</span>' +
+          '<div class="range-btns">' +
+            '<button class="range-btn" onclick="setRange(7,this)">7D</button>' +
+            '<button class="range-btn" onclick="setRange(30,this)">30D</button>' +
+            '<button class="range-btn" onclick="setRange(90,this)">90D</button>' +
+            '<button class="range-btn active" onclick="setRange(\'all\',this)">All</button>' +
+          '</div>' +
+        '</div>' +
+        '<canvas id="priceChart" height="180"></canvas>' +
+      '</div>' +
 
-      <p class="updated">Last updated: ${latest.fetch_time} UTC · ${rows.length} day(s) tracked</p>
-    `;
+      '<div class="card">' +
+        '<table>' +
+          '<tr><th>Date</th><th>Price</th><th style="text-align:right">vs Prior Day</th></tr>' +
+          tableRows +
+        '</table>' +
+      '</div>' +
+
+      '<div class="dl-section">' +
+        '<div class="dl-title">Download Data</div>' +
+        '<div class="dl-presets">' +
+          '<button class="dl-preset-btn" onclick="selectPreset(7,this)">Last 7 days</button>' +
+          '<button class="dl-preset-btn" onclick="selectPreset(30,this)">Last 30 days</button>' +
+          '<button class="dl-preset-btn" onclick="selectPreset(90,this)">Last 90 days</button>' +
+          '<button class="dl-preset-btn" onclick="selectPreset(\'all\',this)">All data</button>' +
+        '</div>' +
+        '<div class="dl-range">' +
+          '<label>From</label>' +
+          '<input type="date" id="dl-from" min="' + minDate + '" max="' + maxDate + '" onchange="onDateRangeChange()">' +
+          '<label>To</label>' +
+          '<input type="date" id="dl-to"   min="' + minDate + '" max="' + maxDate + '" onchange="onDateRangeChange()">' +
+        '</div>' +
+        '<div id="dl-count">Select a preset or date range above</div>' +
+        '<button class="dl-btn" onclick="downloadCSV()">Download CSV</button>' +
+      '</div>' +
+
+      '<p class="updated">Last updated: ' + latest.fetch_time + ' UTC &nbsp;·&nbsp; ' + rows.length + ' data point(s)</p>';
 
     buildChart(rows, 'all');
   }
 
-  fetch(CSV_URL)
-    .then(r => r.text())
-    .then(text => {
-      allRows = parseCSV(text);
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  fetch(CSV_URL + '?t=' + Date.now())
+    .then(function(r) { return r.text(); })
+    .then(function(text) {
+      allRows = sortByDate(parseCSV(text));
       render(allRows);
     })
-    .catch(() => {
+    .catch(function() {
       document.getElementById('app').innerHTML =
-        '<p class="loading">No data yet — check back after the first run.</p>';
+        '<p class="loading">No data yet \u2014 check back after the first run.</p>';
     });
   </script>
 </body>

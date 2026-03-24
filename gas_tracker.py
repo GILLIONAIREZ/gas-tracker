@@ -15,9 +15,10 @@ import smtplib
 import json
 import re
 import sys
+import calendar
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 # ── Config (from environment variables) ──────────────────────────────────────
 EMAIL_FROM   = os.environ.get("EMAIL_FROM", "")
@@ -136,6 +137,80 @@ def append_csv(filepath, row, header=None):
         if new_file and header:
             w.writerow(header)
         w.writerow(row)
+
+
+# ── Back-fill helpers ────────────────────────────────────────────────────────
+def parse_price_date(s):
+    """'3/24/26' → date(2026, 3, 24)"""
+    parts = s.strip().split("/")
+    m, d, y = int(parts[0]), int(parts[1]), int(parts[2])
+    if y < 100:
+        y += 2000
+    return date(y, m, d)
+
+
+def fmt_date(d):
+    """date(2026, 3, 17) → '3/17/26'"""
+    return f"{d.month}/{d.day}/{str(d.year)[2:]}"
+
+
+def month_ago_date(d):
+    month = d.month - 1
+    year  = d.year
+    if month == 0:
+        month, year = 12, year - 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def year_ago_date(d):
+    try:
+        return date(d.year - 1, d.month, d.day)
+    except ValueError:
+        return date(d.year - 1, d.month, d.day - 1)
+
+
+def load_existing_dates():
+    """Return set of price_date strings already saved in gas_data.csv."""
+    if not os.path.exists(DATA_FILE):
+        return set()
+    with open(DATA_FILE, encoding="utf-8") as f:
+        return {row["price_date"].strip() for row in csv.DictReader(f) if row.get("price_date")}
+
+
+def backfill_historical(price_data, fetch_time):
+    """
+    Use the yesterday/week_ago/month_ago/year_ago values from today's fetch
+    to fill in historical dates that aren't yet in the CSV.
+    """
+    try:
+        today = parse_price_date(price_data["price_date"])
+    except Exception:
+        return
+
+    existing = load_existing_dates()
+
+    candidates = [
+        (price_data.get("yesterday"), today - timedelta(days=1)),
+        (price_data.get("week_ago"),  today - timedelta(days=7)),
+        (price_data.get("month_ago"), month_ago_date(today)),
+        (price_data.get("year_ago"),  year_ago_date(today)),
+    ]
+
+    for price, dt in candidates:
+        if not price:
+            continue
+        date_str = fmt_date(dt)
+        if date_str in existing:
+            continue
+        append_csv(
+            DATA_FILE,
+            [fetch_time, date_str, price, "", "", "", ""],
+            header=["fetch_time", "price_date", "current", "yesterday",
+                    "week_ago", "month_ago", "year_ago"],
+        )
+        existing.add(date_str)
+        print(f"   ↩ Backfilled {date_str}: {price}")
 
 
 # ── Email ────────────────────────────────────────────────────────────────────
@@ -295,14 +370,17 @@ def main():
         ],
     )
 
-    # 4. Send email
+    # 4. Back-fill historical dates from comparison columns
+    backfill_historical(price_data, fetch_time)
+
+    # 5. Send email
     try:
         subject, plain, html = build_email(price_data)
         send_email(subject, plain, html)
     except Exception as e:
         print(f"❌ Email failed: {e}")
 
-    # 5. Update state
+    # 6. Update state
     state["last_price_date"]  = price_date
     state["last_price"]       = current_price
     state["last_notify_time"] = fetch_time
