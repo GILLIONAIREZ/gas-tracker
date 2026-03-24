@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>US Gas Price Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #eee;
+      padding: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
+
+    /* Current price card */
+    .card {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .price-big {
+      font-size: 52px;
+      font-weight: 700;
+      letter-spacing: -2px;
+      line-height: 1;
+    }
+    .price-date { color: #888; font-size: 13px; margin-top: 6px; }
+    .change-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .change-chip {
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      flex: 1;
+      min-width: 120px;
+    }
+    .change-chip .label { color: #888; font-size: 11px; margin-bottom: 2px; }
+    .change-chip .val   { font-weight: 600; }
+    .up   { color: #e74c3c; }
+    .down { color: #2ecc71; }
+    .flat { color: #888; }
+
+    /* Chart */
+    .chart-card {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .chart-title {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .range-btns { display: flex; gap: 6px; }
+    .range-btn {
+      background: #2a2a2a;
+      border: none;
+      color: #aaa;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .range-btn.active { background: #3a3a3a; color: #fff; }
+    canvas { width: 100% !important; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { color: #666; font-weight: 500; text-align: left; padding: 6px 0; border-bottom: 1px solid #2a2a2a; }
+    td { padding: 8px 0; border-bottom: 1px solid #1e1e1e; }
+    td:last-child { text-align: right; }
+
+    .loading { color: #666; text-align: center; padding: 40px; }
+    .updated { color: #555; font-size: 11px; text-align: center; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>⛽ US Gas Price</h1>
+  <p class="subtitle">Regular Unleaded · National Average · Source: AAA</p>
+
+  <div id="app"><p class="loading">Loading...</p></div>
+
+  <script>
+  // Fetch CSV from same repo (relative path works on GitHub Pages)
+  const CSV_URL = '../data/gas_data.csv';
+
+  function parseCSV(text) {
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',');
+    return lines.slice(1).map(line => {
+      const vals = line.split(',');
+      const obj = {};
+      headers.forEach((h, i) => obj[h.trim()] = (vals[i] || '').trim());
+      return obj;
+    }).filter(r => r.price_date);
+  }
+
+  function toNum(s) {
+    if (!s) return null;
+    const n = parseFloat(s.replace(/[^0-9.]/g, ''));
+    return isNaN(n) ? null : n;
+  }
+
+  function fmtChange(cur, ref) {
+    if (cur == null || ref == null) return { text: 'N/A', cls: 'flat' };
+    const d = cur - ref;
+    if (Math.abs(d) < 0.0005) return { text: '→ $0.000', cls: 'flat' };
+    const sign = d > 0 ? '+' : '-';
+    return {
+      text: `${d > 0 ? '▲' : '▼'} ${sign}$${Math.abs(d).toFixed(3)}`,
+      cls: d > 0 ? 'up' : 'down'
+    };
+  }
+
+  function parseDate(str) {
+    // Handles "3/23/26" and "3/23/2026"
+    const parts = str.split('/');
+    if (parts.length !== 3) return null;
+    let [m, d, y] = parts.map(Number);
+    if (y < 100) y += 2000;
+    return new Date(y, m - 1, d);
+  }
+
+  let allRows = [];
+  let chart = null;
+
+  function buildChart(rows, days) {
+    const subset = days === 'all' ? rows : rows.slice(-days);
+    const labels = subset.map(r => {
+      const dt = parseDate(r.price_date);
+      return dt ? dt.toISOString().split('T')[0] : r.price_date;
+    });
+    const prices = subset.map(r => toNum(r.current));
+
+    const ctx = document.getElementById('priceChart');
+    if (!ctx) return;
+
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: prices,
+          borderColor: '#f39c12',
+          backgroundColor: 'rgba(243,156,18,0.08)',
+          borderWidth: 2,
+          pointRadius: rows.length > 60 ? 0 : 3,
+          pointHoverRadius: 5,
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `$${ctx.parsed.y.toFixed(3)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'category',
+            ticks: {
+              color: '#666',
+              maxTicksLimit: 6,
+              maxRotation: 0
+            },
+            grid: { color: '#1e1e1e' }
+          },
+          y: {
+            ticks: {
+              color: '#666',
+              callback: v => `$${v.toFixed(2)}`
+            },
+            grid: { color: '#1e1e1e' }
+          }
+        }
+      }
+    });
+  }
+
+  function setRange(days, btn) {
+    document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    buildChart(allRows, days);
+  }
+
+  function render(rows) {
+    if (!rows.length) {
+      document.getElementById('app').innerHTML = '<p class="loading">No data yet.</p>';
+      return;
+    }
+
+    const latest = rows[rows.length - 1];
+    const cur  = toNum(latest.current);
+    const yest = toNum(latest.yesterday);
+    const wk   = toNum(latest.week_ago);
+    const mo   = toNum(latest.month_ago);
+    const yr   = toNum(latest.year_ago);
+
+    const dayChg = fmtChange(cur, yest);
+    const wkChg  = fmtChange(cur, wk);
+    const moChg  = fmtChange(cur, mo);
+    const yrChg  = fmtChange(cur, yr);
+
+    function chip(label, ref, chg) {
+      return `<div class="change-chip">
+        <div class="label">${label}</div>
+        <div>${ref != null ? '$' + ref.toFixed(3) : 'N/A'}</div>
+        <div class="val ${chg.cls}">${chg.text}</div>
+      </div>`;
+    }
+
+    // History table (last 10 entries)
+    const recent = [...rows].reverse().slice(0, 10);
+    const tableRows = recent.map(r => {
+      const c = toNum(r.current);
+      const y = toNum(r.yesterday);
+      const chg = fmtChange(c, y);
+      return `<tr>
+        <td>${r.price_date}</td>
+        <td>${c != null ? '$' + c.toFixed(3) : 'N/A'}</td>
+        <td class="${chg.cls}">${chg.text}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('app').innerHTML = `
+      <div class="card">
+        <div class="price-big ${dayChg.cls}">$${cur != null ? cur.toFixed(3) : 'N/A'}</div>
+        <div class="price-date">as of ${latest.price_date}</div>
+        <div class="change-row">
+          ${chip('vs Yesterday', yest, dayChg)}
+          ${chip('vs 1 Week Ago', wk, wkChg)}
+          ${chip('vs 1 Month Ago', mo, moChg)}
+          ${chip('vs 1 Year Ago', yr, yrChg)}
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">
+          <span>Price History</span>
+          <div class="range-btns">
+            <button class="range-btn" onclick="setRange(7,this)">7D</button>
+            <button class="range-btn" onclick="setRange(30,this)">30D</button>
+            <button class="range-btn" onclick="setRange(90,this)">90D</button>
+            <button class="range-btn active" onclick="setRange('all',this)">All</button>
+          </div>
+        </div>
+        <canvas id="priceChart" height="180"></canvas>
+      </div>
+
+      <div class="card">
+        <table>
+          <tr><th>Date</th><th>Price</th><th style="text-align:right">vs Prev Day</th></tr>
+          ${tableRows}
+        </table>
+      </div>
+
+      <p class="updated">Last updated: ${latest.fetch_time} UTC · ${rows.length} day(s) tracked</p>
+    `;
+
+    buildChart(rows, 'all');
+  }
+
+  fetch(CSV_URL)
+    .then(r => r.text())
+    .then(text => {
+      allRows = parseCSV(text);
+      render(allRows);
+    })
+    .catch(() => {
+      document.getElementById('app').innerHTML =
+        '<p class="loading">No data yet — check back after the first run.</p>';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+name: Daily Gas Price
+
+on:
+  schedule:
+    # 11:00 UTC = 7:00 AM ET (EDT). AAA confirmed updated before 6am ET.
+    - cron: '0 11 * * *'
+  workflow_dispatch:   # allows manual trigger from GitHub UI
+
+jobs:
+  fetch-price:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to commit data back to repo
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch gas price & send email
+        env:
+          EMAIL_FROM:        ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO:          ${{ secrets.EMAIL_TO }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          DASHBOARD_URL:     ${{ secrets.DASHBOARD_URL }}
+        run: python gas_tracker.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "gas-tracker-bot"
+          git config user.email "actions@github.com"
+          git add data/
+          # Only commit if something actually changed
+          git diff --cached --quiet || git commit -m "data: $(date -u '+%Y-%m-%d') price update"
+          git push
