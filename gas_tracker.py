@@ -345,8 +345,11 @@ def main():
     state  = load_state()
     is_new = price_date != state.get("last_price_date", "")
 
+    # Always back-fill historical dates from comparison columns (safe — skips existing dates)
+    backfill_historical(price_data, fetch_time)
+
     if not is_new:
-        print(f"ℹ️  Already have {price_date} ({current_price}). No action.")
+        print(f"ℹ️  Already have {price_date} ({current_price}). No new email.")
         return
 
     print(f"🆕 New price for {price_date}: {current_price}")
