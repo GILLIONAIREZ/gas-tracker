@@ -98,8 +98,7 @@
   <div id="app"><p class="loading">Loading...</p></div>
 
   <script>
-  // Fetch CSV from same repo (relative path works on GitHub Pages)
-  const CSV_URL = '../data/gas_data.csv';
+  const CSV_URL = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/gas_data.csv';
 
   function parseCSV(text) {
     const lines = text.trim().split('\n');
