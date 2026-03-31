@@ -2,7 +2,9 @@ name: Daily Gas Price
 
 on:
   schedule:
-    # 11:00 UTC = 7:00 AM ET (EDT). AAA confirmed updated before 6am ET.
+    # 10:00 UTC = 5 AM EST / 6 AM EDT  (primary — AAA updates ~5 PM ET, data always ready)
+    - cron: '0 10 * * *'
+    # 11:00 UTC = 6 AM EST / 7 AM EDT  (retry — skips cleanly if primary already succeeded)
     - cron: '0 11 * * *'
   workflow_dispatch:   # allows manual trigger from GitHub UI
 

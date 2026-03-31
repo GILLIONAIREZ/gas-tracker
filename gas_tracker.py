@@ -9,6 +9,12 @@ Designed to run in GitHub Actions. Secrets come from environment variables.
 
 import requests
 from bs4 import BeautifulSoup
+
+try:
+    from curl_cffi import requests as curl_requests
+    _CURL_AVAILABLE = True
+except ImportError:
+    _CURL_AVAILABLE = False
 import csv
 import os
 import smtplib
@@ -49,7 +55,10 @@ def fetch_prices():
     Fetch gas price data from AAA.
     Returns dict: current, yesterday, week_ago, month_ago, year_ago, price_date.
     """
-    resp = requests.get(AAA_URL, headers=HEADERS, timeout=20)
+    if _CURL_AVAILABLE:
+        resp = curl_requests.get(AAA_URL, impersonate="chrome120", timeout=30)
+    else:
+        resp = requests.get(AAA_URL, headers=HEADERS, timeout=20)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
