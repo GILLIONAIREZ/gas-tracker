@@ -24,7 +24,7 @@ import sys
 import calendar
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 # ── Config (from environment variables) ──────────────────────────────────────
 EMAIL_FROM   = os.environ.get("EMAIL_FROM", "")
@@ -34,6 +34,7 @@ APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR     = os.path.join(BASE_DIR, "data")
 DATA_FILE    = os.path.join(DATA_DIR, "gas_data.csv")
+FUTURES_FILE = os.path.join(DATA_DIR, "futures_data.csv")
 STATE_FILE   = os.path.join(DATA_DIR, "state.json")
 
 AAA_URL      = "https://gasprices.aaa.com/"
@@ -327,8 +328,54 @@ def send_email(subject, plain, html=None):
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
+def fetch_and_save_futures():
+    """
+    Fetch 1 year of RBOB gasoline front-month futures (RB=F) from Yahoo Finance
+    and append any dates not already in futures_data.csv.
+    """
+    try:
+        resp = requests.get(
+            "https://query1.finance.yahoo.com/v8/finance/chart/RB%3DF",
+            params={"interval": "1d", "range": "1y"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        result = resp.json()["chart"]["result"][0]
+        timestamps = result["timestamp"]
+        closes     = result["indicators"]["quote"][0]["close"]
+    except Exception as e:
+        print(f"⚠️  Futures fetch failed: {e}")
+        return
+
+    existing = set()
+    if os.path.exists(FUTURES_FILE):
+        with open(FUTURES_FILE, encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row.get("price_date"):
+                    existing.add(row["price_date"].strip())
+
+    new_rows = 0
+    for ts, close in zip(timestamps, closes):
+        if close is None:
+            continue
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        date_str = f"{dt.month}/{dt.day}/{str(dt.year)[2:]}"
+        if date_str in existing:
+            continue
+        append_csv(
+            FUTURES_FILE,
+            [dt.strftime("%Y-%m-%d"), date_str, round(close, 4)],
+            header=["fetch_time", "price_date", "rbob_close"],
+        )
+        existing.add(date_str)
+        new_rows += 1
+
+    print(f"   📈 Futures: {new_rows} new rows added" if new_rows else "   📈 Futures: up to date")
+
+
 def main():
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     fetch_time = now.strftime("%Y-%m-%d %H:%M:%S")
     print(f"🔄 Fetching AAA gas prices at {fetch_time} UTC ...")
 
@@ -359,6 +406,7 @@ def main():
 
     if not is_new:
         print(f"ℹ️  Already have {price_date} ({current_price}). No new email.")
+        fetch_and_save_futures()
         return
 
     print(f"🆕 New price for {price_date}: {current_price}")
@@ -397,6 +445,10 @@ def main():
     state["last_price"]       = current_price
     state["last_notify_time"] = fetch_time
     save_state(state)
+
+    # 7. Fetch & save RBOB futures (always runs, backfills 1y on first run)
+    fetch_and_save_futures()
+
     print("✅ Done.")
 
 
