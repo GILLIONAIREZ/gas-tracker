@@ -405,7 +405,12 @@ def main():
     backfill_historical(price_data, fetch_time)
 
     if not is_new:
-        print(f"ℹ️  Already have {price_date} ({current_price}). No new email.")
+        # Distinguish "AAA not updated yet" from "already sent today's email"
+        today_fmt = f"{date.today().month}/{date.today().day}/{str(date.today().year)[2:]}"
+        if price_date != today_fmt:
+            print(f"⏳ AAA still showing {price_date} — today's data ({today_fmt}) not yet available. Retry later.")
+        else:
+            print(f"ℹ️  Already sent for {price_date} ({current_price}). Nothing to do.")
         fetch_and_save_futures()
         return
 
