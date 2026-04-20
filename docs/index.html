@@ -40,7 +40,12 @@
       background: #2a2a2a; border: none; color: #aaa;
       padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
     }
-    .rbtn.active { background: #3a3a3a; color: #fff; }
+    .rbtn.active  { background: #3a3a3a; color: #fff; }
+    .frbtn {
+      background: #2a2a2a; border: none; color: #aaa;
+      padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    }
+    .frbtn.active { background: #3a3a3a; color: #fff; }
     canvas { width: 100% !important; }
 
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -81,10 +86,11 @@
 <script>
 var CSV_URL     = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/gas_data.csv';
 var FUTURES_URL = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/futures_data.csv';
-var allRows     = [];
-var chart       = null;
-var futChart    = null;
-var dlRows      = [];
+var allRows        = [];
+var allFuturesRows = [];
+var chart          = null;
+var futChart       = null;
+var dlRows         = [];
 
 // ── Parse ──────────────────────────────────────────────────────────────────
 function parseCSV(text) {
@@ -225,12 +231,19 @@ function buildFuturesChart(rows) {
   });
 }
 
+function setFuturesRange(range, btn) {
+  document.querySelectorAll('.frbtn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  var subset = (range === 'all') ? allFuturesRows : filterLastDays(allFuturesRows, Number(range));
+  buildFuturesChart(subset);
+}
+
 function loadFutures() {
   fetch(FUTURES_URL + '?t=' + Date.now())
     .then(function(r) { return r.text(); })
     .then(function(text) {
-      var rows = sortByDate(parseFuturesCSV(text));
-      buildFuturesChart(rows);
+      allFuturesRows = sortByDate(parseFuturesCSV(text));
+      buildFuturesChart(allFuturesRows);
     })
     .catch(function() {
       var el = document.getElementById('futuresChart');
@@ -424,7 +437,12 @@ function render(rows) {
     '<div class="chart-card">' +
       '<div class="chart-hdr">' +
         '<span>RBOB Gasoline Futures (RB=F)</span>' +
-        '<span style="font-size:11px;color:#555;">Front Month &middot; $/gal</span>' +
+        '<div class="range-btns">' +
+          '<button class="frbtn" onclick="setFuturesRange(7,this)">7D</button>' +
+          '<button class="frbtn" onclick="setFuturesRange(30,this)">30D</button>' +
+          '<button class="frbtn" onclick="setFuturesRange(90,this)">90D</button>' +
+          '<button class="frbtn active" onclick="setFuturesRange(\'all\',this)">All</button>' +
+        '</div>' +
       '</div>' +
       '<canvas id="futuresChart" height="180"></canvas>' +
     '</div>' +
