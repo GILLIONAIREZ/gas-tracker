@@ -2,10 +2,10 @@ name: Daily Gas Price
 
 on:
   schedule:
-    # 09:00 UTC = 5 AM EDT / 4 AM EST  (primary — AAA updates ~5 PM ET, data always ready)
+    # 08:00 UTC = 4 AM EDT / 3 AM EST  (primary — AAA updates ~5 PM ET, data always ready)
+    - cron: '0 8 * * *'
+    # 09:00 UTC = 5 AM EDT / 4 AM EST  (retry — skips cleanly if primary already succeeded)
     - cron: '0 9 * * *'
-    # 10:00 UTC = 6 AM EDT / 5 AM EST  (retry — skips cleanly if primary already succeeded)
-    - cron: '0 10 * * *'
   workflow_dispatch:   # allows manual trigger from GitHub UI
 
 jobs:
