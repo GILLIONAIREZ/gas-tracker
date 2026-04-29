@@ -34,11 +34,18 @@ jobs:
           DASHBOARD_URL:     ${{ secrets.DASHBOARD_URL }}
         run: python gas_tracker.py
 
+      - name: Scrape GasBuddy 5Y history
+        run: python scrape_gasbuddy.py
+
+      - name: Run lag analysis
+        run: python lag_analysis.py
+        continue-on-error: true   # don't fail the whole run if overlap is too small yet
+
       - name: Commit updated data
         run: |
           git config user.name  "gas-tracker-bot"
           git config user.email "actions@github.com"
           git add data/
           # Only commit if something actually changed
-          git diff --cached --quiet || git commit -m "data: $(date -u '+%Y-%m-%d') prices + futures"
+          git diff --cached --quiet || git commit -m "data: $(date -u '+%Y-%m-%d') prices + futures + gasbuddy"
           git push

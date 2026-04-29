@@ -76,6 +76,36 @@
     .dl-btn:hover { background: #3498db; }
     .loading { color: #666; text-align: center; padding: 40px; }
     .updated { color: #555; font-size: 11px; text-align: center; margin-top: 20px; }
+
+    .live-gb { background: #1a1a1a; border-radius: 12px; padding: 16px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .live-gb .gb-price { font-size: 36px; font-weight: 700; line-height: 1; }
+    .live-gb .gb-label { color: #888; font-size: 11px; margin-bottom: 4px; }
+    .live-gb .gb-updated { color: #444; font-size: 10px; margin-top: 8px; }
+    .signal-card { background: #1a1a1a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .signal-hdr { font-size: 14px; color: #888; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .signal-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .signal-chip { background: #2a2a2a; border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 100px; }
+    .signal-chip .lbl { color: #888; font-size: 11px; margin-bottom: 2px; }
+    .signal-chip .val { font-weight: 600; font-size: 14px; }
+    .signal-arrow { font-size: 52px; font-weight: 700; line-height: 1; margin-right: 8px; }
+    .feature-list { margin-top: 10px; }
+    .feature-row { display: flex; justify-content: space-between; font-size: 12px; padding: 5px 0; border-bottom: 1px solid #222; }
+    .feature-row:last-child { border-bottom: none; }
+    .feature-row .fname { color: #888; }
+    .feature-row .fr-val { font-weight: 600; }
+    .grbtn { background: #2a2a2a; border: none; color: #aaa; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .grbtn.active { background: #3a3a3a; color: #fff; }
+    .analysis-section { background: #1a1a1a; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .analysis-hdr { font-size: 14px; color: #888; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .lag-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .lagbtn { background: #2a2a2a; border: none; color: #aaa; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .lagbtn.active { background: #3a3a3a; color: #fff; }
+    .corr-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .corr-chip { background: #2a2a2a; border-radius: 6px; padding: 6px 10px; font-size: 12px; text-align: center; }
+    .corr-chip .corr-lbl { color: #666; font-size: 10px; margin-bottom: 2px; }
+    .corr-chip .corr-val { font-weight: 600; color: #3498db; }
+    .corr-chip.best .corr-val { color: #2ecc71; }
+    .analysis-note { color: #555; font-size: 11px; margin-top: 8px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -84,12 +114,17 @@
   <div id="app"><p class="loading">Loading...</p></div>
 
 <script>
-var CSV_URL     = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/gas_data.csv';
-var FUTURES_URL = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/futures_data.csv';
+var CSV_URL        = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/gas_data.csv';
+var FUTURES_URL    = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/futures_data.csv';
+var GB_DAILY_URL   = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/gasbuddy_data.csv';
+var GB_INTRADAY_URL = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/gasbuddy_intraday.csv';
+var LAG_URL        = 'https://raw.githubusercontent.com/GILLIONAIREZ/gas-tracker/main/data/lag_analysis.json';
 var allRows        = [];
 var allFuturesRows = [];
+var allGBRows      = [];
 var chart          = null;
 var futChart       = null;
+var gbChart        = null;
 var dlRows         = [];
 
 // ── Parse ──────────────────────────────────────────────────────────────────
@@ -205,12 +240,14 @@ function buildFuturesChart(rows) {
         borderWidth: 2,
         pointRadius: pts.length > 60 ? 0 : 4,
         pointHoverRadius: 6,
+        pointHitRadius: 20,
         fill: true,
         tension: 0.3
       }]
     },
     options: {
       responsive: true,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: function(c) { return '$' + c.parsed.y.toFixed(4) + '/gal'; } } }
@@ -244,6 +281,7 @@ function loadFutures() {
     .then(function(text) {
       allFuturesRows = sortByDate(parseFuturesCSV(text));
       buildFuturesChart(allFuturesRows);
+      renderAnalysis();
     })
     .catch(function() {
       var el = document.getElementById('futuresChart');
@@ -277,12 +315,14 @@ function buildChart(rows) {
         borderWidth: 2,
         pointRadius: pts.length > 60 ? 0 : 4,
         pointHoverRadius: 6,
+        pointHitRadius: 20,
         fill: true,
         tension: 0.3
       }]
     },
     options: {
       responsive: true,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: function(c) { return '$' + c.parsed.y.toFixed(3); } } }
@@ -358,6 +398,364 @@ function downloadCSV() {
   URL.revokeObjectURL(url);
 }
 
+// ── GasBuddy ──────────────────────────────────────────────────────────────
+function parseGBCSV(text) {
+  var lines = text.trim().split('\n');
+  var headers = lines[0].split(',').map(function(h){ return h.trim(); });
+  return lines.slice(1).map(function(line) {
+    var vals = line.split(',');
+    var obj = {};
+    headers.forEach(function(h, i){ obj[h] = (vals[i]||'').trim(); });
+    return obj;
+  }).filter(function(r){ return r.date && r.national_avg_regular; });
+}
+
+function parseIntradayCSV(text) {
+  var lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  var headers = lines[0].split(',').map(function(h){ return h.trim(); });
+  return lines.slice(1).map(function(line) {
+    var vals = line.split(',');
+    var obj = {};
+    headers.forEach(function(h, i){ obj[h] = (vals[i]||'').trim(); });
+    return obj;
+  }).filter(function(r){ return r.live_ticking_avg; });
+}
+
+function buildGBChart(gbRows, aaaRows) {
+  var ctx = document.getElementById('gbChart');
+  if (!ctx) return;
+  if (gbChart) { try { gbChart.destroy(); } catch(e) {} gbChart = null; }
+
+  var gbPts = gbRows.map(function(r){
+    return { x: r.date, y: parseFloat(r.national_avg_regular) };
+  }).filter(function(p){ return !isNaN(p.y); });
+
+  var aaaPts = aaaRows.map(function(r){
+    return { x: toISO(r.price_date), y: toNum(r.current) };
+  }).filter(function(p){ return p.y !== null; });
+
+  gbChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'GasBuddy', data: gbPts, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,0.06)',
+          borderWidth: 2, pointRadius: 0, pointHitRadius: 20, fill: true, tension: 0.3, order: 2 },
+        { label: 'AAA', data: aaaPts, borderColor: '#f39c12', backgroundColor: 'transparent',
+          borderWidth: 2, pointRadius: 0, pointHitRadius: 20, fill: false, tension: 0.3, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, labels: { color: '#888', boxWidth: 16, font: { size: 11 } } },
+        tooltip: { callbacks: { label: function(c){ return c.dataset.label + ': $' + c.parsed.y.toFixed(3); } } }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'month', tooltipFormat: 'MMM d, yyyy', displayFormats: { month: 'MMM yy' } }, ticks: { color: '#666', maxTicksLimit: 8 }, grid: { color: '#1e1e1e' } },
+        y: { ticks: { color: '#666', callback: function(v){ return '$' + v.toFixed(2); } }, grid: { color: '#1e1e1e' } }
+      }
+    }
+  });
+}
+
+function setGBRange(range, btn) {
+  document.querySelectorAll('.grbtn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  var subset = range === 'all' ? allGBRows : filterLastDays(allGBRows, Number(range));
+  buildGBChart(subset, allRows);
+}
+
+function renderLiveWidget(intradayRows) {
+  var el = document.getElementById('live-gb-container');
+  if (!el || !intradayRows || !intradayRows.length) return;
+  var latest   = intradayRows[intradayRows.length - 1];
+  var live     = parseFloat(latest.live_ticking_avg);
+  var vsYday   = parseFloat(latest.live_vs_yesterday);
+  var trend    = (latest.today_trend || '').toLowerCase();
+  var updated  = (latest.last_updated_at || latest.scraped_at_utc || '').slice(0, 16);
+  var vsCls    = vsYday > 0.0005 ? 'up' : vsYday < -0.0005 ? 'down' : 'flat';
+  var vsStr    = (vsYday >= 0 ? '+' : '') + '$' + Math.abs(vsYday).toFixed(3);
+  var arrow    = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '→';
+  el.innerHTML =
+    '<div class="live-gb">' +
+      '<div>' +
+        '<div class="gb-label">GasBuddy Live (crowdsourced)</div>' +
+        '<div class="gb-price ' + vsCls + '">$' + live.toFixed(3) + '</div>' +
+        '<div style="font-size:12px;color:#666;margin-top:4px;">vs yesterday: <span class="' + vsCls + '">' + vsStr + '</span></div>' +
+        '<div class="gb-updated">Updated ' + updated + ' UTC</div>' +
+      '</div>' +
+      '<div class="change-chip" style="min-width:100px;">' +
+        '<div class="lbl">Today\'s trend</div>' +
+        '<div class="val ' + vsCls + '">' + arrow + ' ' + (trend || '—') + '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+function renderSignalCard(lagData) {
+  var el = document.getElementById('signal-container');
+  if (!el) return;
+  if (!lagData || !lagData.ranked_features || !lagData.ranked_features.length) {
+    el.innerHTML = '<div class="signal-card"><p style="color:#555;font-size:13px;text-align:center;padding:8px;">Predictive signal will appear once enough overlap data accumulates.</p></div>';
+    return;
+  }
+  var ts = lagData.top_signal || {};
+  var dir = ts.implied_aaa_direction || 'flat';
+  var arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '→';
+  var arrowCls = dir === 'up' ? 'up' : dir === 'down' ? 'down' : 'flat';
+
+  function dStr(v) { return v != null ? '$' + parseFloat(v).toFixed(3) : '—'; }
+  function rStr(v) { return v != null ? (v >= 0 ? '+' : '') + parseFloat(v).toFixed(3) : '—'; }
+
+  var spread = lagData.gb_aaa_spread != null ? parseFloat(lagData.gb_aaa_spread) : null;
+  var spreadStr  = spread != null ? (spread >= 0 ? '+' : '') + '$' + Math.abs(spread).toFixed(3) : '—';
+  var spreadCls  = spread != null ? (spread > 0 ? 'up' : 'down') : 'flat';
+
+  var top3 = (lagData.ranked_features || []).slice(0, 4);
+  var featureRows = top3.map(function(f) {
+    var absr = Math.abs(f.pearson_r);
+    var cls  = absr > 0.4 ? 'down' : absr > 0.2 ? 'flat' : 'flat';
+    return '<div class="feature-row">' +
+      '<span class="fname">' + f.feature + '</span>' +
+      '<span class="fr-val ' + cls + '">' + (f.pearson_r >= 0 ? '+' : '') + f.pearson_r.toFixed(3) + ' <span style="color:#444;">(n=' + f.n + ')</span></span>' +
+    '</div>';
+  }).join('');
+
+  var intradayNote = lagData.intraday_days_available < lagData.min_intraday_days_threshold
+    ? '<p class="analysis-note" style="margin-top:8px;">Intraday features unlock after ' + lagData.min_intraday_days_threshold + ' days of live data (' + lagData.intraday_days_available + '/' + lagData.min_intraday_days_threshold + ' collected).</p>'
+    : '';
+
+  el.innerHTML =
+    '<div class="signal-card">' +
+      '<div class="signal-hdr">' +
+        '<span>GasBuddy &#8594; AAA Signal</span>' +
+        '<span style="font-size:11px;color:#444;">' + (lagData.generated_at || '').slice(0,10) + ' &middot; ' + (lagData.overlap_days || 0) + ' overlap days</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
+        '<div class="signal-arrow ' + arrowCls + '">' + arrow + '</div>' +
+        '<div class="signal-grid" style="flex:1;">' +
+          '<div class="signal-chip"><div class="lbl">GasBuddy</div><div class="val">' + dStr(lagData.latest_gb_price) + '</div><div style="font-size:10px;color:#555;">' + (lagData.latest_gb_date || '') + '</div></div>' +
+          '<div class="signal-chip"><div class="lbl">AAA</div><div class="val">' + dStr(lagData.latest_aaa_price) + '</div><div style="font-size:10px;color:#555;">' + (lagData.latest_aaa_date || '') + '</div></div>' +
+          '<div class="signal-chip"><div class="lbl">GB &#8722; AAA</div><div class="val ' + spreadCls + '">' + spreadStr + '</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="feature-list">' +
+        '<div style="font-size:11px;color:#555;margin-bottom:4px;margin-top:12px;">TOP FEATURES &rarr; next-day AAA &Delta;</div>' +
+        featureRows +
+      '</div>' +
+      intradayNote +
+    '</div>';
+}
+
+function loadGasBuddy() {
+  // Daily 5Y history
+  fetch(GB_DAILY_URL + '?t=' + Date.now())
+    .then(function(r){ return r.text(); })
+    .then(function(text){
+      allGBRows = parseGBCSV(text).sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+      buildGBChart(allGBRows, allRows);
+    })
+    .catch(function(){
+      var el = document.getElementById('gbChart');
+      if (el) el.outerHTML = '<p style="color:#555;text-align:center;padding:20px;font-size:13px;">GasBuddy data unavailable</p>';
+    });
+  // Lag analysis JSON
+  fetch(LAG_URL + '?t=' + Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(data){ renderSignalCard(data); })
+    .catch(function(){ renderSignalCard(null); });
+  // Intraday (optional — absent until live workflow starts committing)
+  fetch(GB_INTRADAY_URL + '?t=' + Date.now())
+    .then(function(r){ return r.text(); })
+    .then(function(text){ renderLiveWidget(parseIntradayCSV(text)); })
+    .catch(function(){ /* no intraday yet — silently skip */ });
+}
+
+// ── Analysis ──────────────────────────────────────────────────────────────
+var analysisLag = 14;
+var spreadChart = null;
+var lagChart    = null;
+
+function buildFuturesMap(futRows) {
+  var map = {};
+  futRows.forEach(function(r) {
+    if (r.price_date && r.rbob_close) map[toISO(r.price_date)] = parseFloat(r.rbob_close);
+  });
+  return map;
+}
+
+function nearestFutures(isoDate, futMap, maxDays) {
+  var dt = new Date(isoDate + 'T00:00:00');
+  for (var i = 0; i <= maxDays; i++) {
+    var d = new Date(dt);
+    d.setDate(d.getDate() - i);
+    var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    if (futMap[key] !== undefined) return futMap[key];
+  }
+  return null;
+}
+
+function getAlignedData(retailRows, futMap, lagDays) {
+  var result = [];
+  retailRows.forEach(function(r) {
+    var retail = toNum(r.current);
+    if (retail === null) return;
+    var isoDate = toISO(r.price_date);
+    var lagDate = new Date(isoDate + 'T00:00:00');
+    lagDate.setDate(lagDate.getDate() - lagDays);
+    var lagISO = lagDate.getFullYear() + '-' + String(lagDate.getMonth()+1).padStart(2,'0') + '-' + String(lagDate.getDate()).padStart(2,'0');
+    var fut = nearestFutures(lagISO, futMap, 5);
+    if (fut !== null) result.push({ date: isoDate, retail: retail, futures: fut });
+  });
+  return result;
+}
+
+function pearsonR(xs, ys) {
+  var n = xs.length;
+  if (n < 4) return null;
+  var mx = xs.reduce(function(a,b){return a+b;},0)/n;
+  var my = ys.reduce(function(a,b){return a+b;},0)/n;
+  var num = 0, sx2 = 0, sy2 = 0;
+  for (var i = 0; i < n; i++) {
+    num += (xs[i]-mx)*(ys[i]-my);
+    sx2 += (xs[i]-mx)*(xs[i]-mx);
+    sy2 += (ys[i]-my)*(ys[i]-my);
+  }
+  return (sx2 === 0 || sy2 === 0) ? null : num / Math.sqrt(sx2*sy2);
+}
+
+function buildSpreadChartEl(aligned0) {
+  var ctx = document.getElementById('spreadChart');
+  if (!ctx) return;
+  if (spreadChart) { try { spreadChart.destroy(); } catch(e) {} spreadChart = null; }
+  var pts = aligned0.map(function(d) {
+    return { x: d.date, y: Math.round((d.retail - d.futures)*1000)/1000 };
+  });
+  spreadChart = new Chart(ctx, {
+    type: 'line',
+    data: { datasets: [{ data: pts, borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.08)', borderWidth: 2, pointRadius: 0, pointHitRadius: 20, fill: true, tension: 0.3 }] },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(c) { return 'Spread: $' + c.parsed.y.toFixed(3) + '/gal'; } } }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'month', tooltipFormat: 'MMM d, yyyy', displayFormats: { month: 'MMM yy' } }, ticks: { color: '#666', maxTicksLimit: 6 }, grid: { color: '#1e1e1e' } },
+        y: { ticks: { color: '#666', callback: function(v) { return '$' + v.toFixed(2); } }, grid: { color: '#1e1e1e' } }
+      }
+    }
+  });
+}
+
+function buildLagChartEl(lag) {
+  var ctx = document.getElementById('lagChart');
+  if (!ctx) return;
+  if (lagChart) { try { lagChart.destroy(); } catch(e) {} lagChart = null; }
+  var futMap  = buildFuturesMap(allFuturesRows);
+  var aligned = getAlignedData(allRows, futMap, lag);
+  if (!aligned.length) return;
+  lagChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'AAA Retail', data: aligned.map(function(d){ return { x: d.date, y: d.retail }; }),
+          borderColor: '#f39c12', backgroundColor: 'transparent', borderWidth: 2,
+          pointRadius: 0, pointHitRadius: 20, tension: 0.3, yAxisID: 'y' },
+        { label: 'RBOB Futures (' + (lag > 0 ? lag + 'd ago)' : 'same day)'),
+          data: aligned.map(function(d){ return { x: d.date, y: d.futures }; }),
+          borderColor: '#3498db', backgroundColor: 'transparent', borderWidth: 2,
+          borderDash: [5, 4], pointRadius: 0, pointHitRadius: 20, tension: 0.3, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, labels: { color: '#888', boxWidth: 16, font: { size: 11 } } },
+        tooltip: { callbacks: { label: function(c) { return '$' + c.parsed.y.toFixed(3) + (c.datasetIndex === 0 ? ' retail' : ' futures'); } } }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'month', tooltipFormat: 'MMM d, yyyy', displayFormats: { month: 'MMM yy' } }, ticks: { color: '#666', maxTicksLimit: 6 }, grid: { color: '#1e1e1e' } },
+        y:  { position: 'left',  ticks: { color: '#f39c12', callback: function(v){ return '$'+v.toFixed(2); } }, grid: { color: '#1e1e1e' } },
+        y1: { position: 'right', ticks: { color: '#3498db', callback: function(v){ return '$'+v.toFixed(2); } }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+function setAnalysisLag(lag, btn) {
+  document.querySelectorAll('.lagbtn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  analysisLag = lag;
+  buildLagChartEl(lag);
+  document.querySelectorAll('.corr-chip[data-lag]').forEach(function(c){
+    c.classList.toggle('best', parseInt(c.dataset.lag) === lag);
+  });
+}
+
+function renderAnalysis() {
+  var container = document.getElementById('analysis-container');
+  if (!container || !allRows.length || !allFuturesRows.length) return;
+
+  var futMap = buildFuturesMap(allFuturesRows);
+  var LAGS   = [0, 7, 10, 14, 21, 30];
+  var corrs  = {};
+  var bestLag = 0, bestR = -Infinity;
+
+  LAGS.forEach(function(lag) {
+    var a = getAlignedData(allRows, futMap, lag);
+    var r = a.length >= 5 ? pearsonR(a.map(function(d){return d.retail;}), a.map(function(d){return d.futures;})) : null;
+    corrs[lag] = r;
+    if (r !== null && r > bestR) { bestR = r; bestLag = lag; }
+  });
+
+  var aligned0    = getAlignedData(allRows, futMap, 0);
+  var spreads     = aligned0.map(function(d){ return d.retail - d.futures; });
+  var avgSpread   = spreads.length ? spreads.reduce(function(a,b){return a+b;},0)/spreads.length : null;
+  var latestSpread = spreads.length ? spreads[spreads.length-1] : null;
+
+  function rStr(r)  { return r    !== null ? r.toFixed(3)    : '—'; }
+  function dStr(v)  { return v    !== null ? '$'+v.toFixed(3) : 'N/A'; }
+
+  var lagBtns = LAGS.map(function(l) {
+    return '<button class="lagbtn'+(l===bestLag?' active':'')+'" onclick="setAnalysisLag('+l+',this)">'+(l===0?'Same day':l+'D')+'</button>';
+  }).join('');
+
+  var corrChips = LAGS.map(function(l) {
+    return '<div class="corr-chip'+(l===bestLag?' best':'')+'" data-lag="'+l+'">'+
+      '<div class="corr-lbl">'+l+'d lag</div>'+
+      '<div class="corr-val">r='+rStr(corrs[l])+'</div>'+
+    '</div>';
+  }).join('');
+
+  container.innerHTML =
+    '<div class="analysis-section">'+
+      '<div class="analysis-hdr"><span>Futures &#8722; Retail Spread</span></div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">'+
+        '<div class="corr-chip"><div class="corr-lbl">Latest spread</div><div class="corr-val" style="color:#9b59b6;">'+dStr(latestSpread)+'/gal</div></div>'+
+        '<div class="corr-chip"><div class="corr-lbl">Avg spread</div><div class="corr-val" style="color:#9b59b6;">'+dStr(avgSpread)+'/gal</div></div>'+
+      '</div>'+
+      '<canvas id="spreadChart" height="130"></canvas>'+
+      '<p class="analysis-note">Retail minus RBOB front-month futures. Represents taxes (~50&#162;/gal), refining, distribution &amp; retail margin. Sharp jumps at month-end may reflect NYMEX contract rollovers (summer/winter blend transitions).</p>'+
+    '</div>'+
+    '<div class="analysis-section">'+
+      '<div class="analysis-hdr">'+
+        '<span>Lag Analysis &mdash; best: <strong style="color:#2ecc71;">'+bestLag+'d (r='+rStr(corrs[bestLag])+')</strong></span>'+
+        '<div class="lag-btns">'+lagBtns+'</div>'+
+      '</div>'+
+      '<canvas id="lagChart" height="180"></canvas>'+
+      '<div class="corr-row">'+corrChips+'</div>'+
+      '<p class="analysis-note">RBOB futures (dashed, right axis) shifted forward by selected lag vs AAA retail (solid, left axis). Green chip = lag with highest Pearson r &mdash; this is how many days futures tends to lead retail prices.</p>'+
+    '</div>';
+
+  analysisLag = bestLag;
+  buildSpreadChartEl(aligned0);
+  buildLagChartEl(bestLag);
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────
 function render(rows) {
   if (!rows.length) {
@@ -421,9 +819,26 @@ function render(rows) {
       '</div>' +
     '</div>' +
 
+    '<div id="live-gb-container"></div>' +
+
     '<div class="chart-card">' +
       '<div class="chart-hdr">' +
-        '<span>Retail Price History</span>' +
+        '<span>GasBuddy + AAA History</span>' +
+        '<div class="range-btns">' +
+          '<button class="grbtn" onclick="setGBRange(180,this)">6M</button>' +
+          '<button class="grbtn" onclick="setGBRange(365,this)">1Y</button>' +
+          '<button class="grbtn" onclick="setGBRange(730,this)">2Y</button>' +
+          '<button class="grbtn active" onclick="setGBRange(\'all\',this)">5Y</button>' +
+        '</div>' +
+      '</div>' +
+      '<canvas id="gbChart" height="200"></canvas>' +
+    '</div>' +
+
+    '<div id="signal-container"></div>' +
+
+    '<div class="chart-card">' +
+      '<div class="chart-hdr">' +
+        '<span>AAA Retail Price (short-term)</span>' +
         '<div class="range-btns">' +
           '<button class="rbtn" onclick="setChartRange(7,this)">7D</button>' +
           '<button class="rbtn" onclick="setChartRange(30,this)">30D</button>' +
@@ -446,6 +861,8 @@ function render(rows) {
       '</div>' +
       '<canvas id="futuresChart" height="180"></canvas>' +
     '</div>' +
+
+    '<div id="analysis-container"></div>' +
 
     '<div class="card">' +
       '<table>' +
@@ -479,6 +896,7 @@ function render(rows) {
   // Build charts after DOM update
   buildChart(rows);
   loadFutures();
+  loadGasBuddy();
 }
 
 // ── Load ───────────────────────────────────────────────────────────────────

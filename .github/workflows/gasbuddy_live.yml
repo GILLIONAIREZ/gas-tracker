@@ -1,0 +1,37 @@
+name: GasBuddy Live Ticker
+
+on:
+  schedule:
+    # Every 30 minutes, around the clock
+    - cron: '*/30 * * * *'
+  workflow_dispatch:   # manual trigger for testing
+
+jobs:
+  scrape-live:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch GasBuddy live tick
+        run: python scrape_gasbuddy_live.py
+
+      - name: Commit intraday data
+        run: |
+          git config user.name  "gas-tracker-bot"
+          git config user.email "actions@github.com"
+          # Commit intraday CSV only — snapshots stay local, not committed
+          git add data/gasbuddy_intraday.csv
+          git diff --cached --quiet || git commit -m "live: gasbuddy tick $(date -u '+%Y-%m-%dT%H:%M')"
+          git push

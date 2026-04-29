@@ -332,6 +332,15 @@ def fetch_and_save_futures():
     """
     Fetch 1 year of RBOB gasoline front-month futures (RB=F) from Yahoo Finance
     and append any dates not already in futures_data.csv.
+
+    Data notes:
+    - Uses Yahoo's 'close' price, which matches NYMEX settlement for RB=F.
+    - 'adjclose' equals 'close' for futures (no dividend/split adjustments).
+    - Apparent sharp jumps at month-end are expected: NYMEX RBOB contracts roll
+      on the last business day of the prior month. The Feb→Mar roll carries a
+      ~$0.25-0.30/gal seasonal premium (winter→summer blend spec). The Aug→Sep
+      roll typically drops by a similar magnitude. These are real market prices,
+      not data errors.
     """
     try:
         resp = requests.get(
@@ -344,6 +353,10 @@ def fetch_and_save_futures():
         result = resp.json()["chart"]["result"][0]
         timestamps = result["timestamp"]
         closes     = result["indicators"]["quote"][0]["close"]
+        # adjclose == close for futures, but use as fallback for any null closes
+        adj_closes = (
+            result["indicators"].get("adjclose", [{}])[0].get("adjclose") or []
+        )
     except Exception as e:
         print(f"⚠️  Futures fetch failed: {e}")
         return
@@ -356,7 +369,9 @@ def fetch_and_save_futures():
                     existing.add(row["price_date"].strip())
 
     new_rows = 0
-    for ts, close in zip(timestamps, closes):
+    for i, (ts, close) in enumerate(zip(timestamps, closes)):
+        if close is None:
+            close = adj_closes[i] if i < len(adj_closes) else None
         if close is None:
             continue
         dt = datetime.fromtimestamp(ts, tz=timezone.utc)
