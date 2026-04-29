@@ -470,36 +470,101 @@ function buildGBChart(gbRows, aaaRows) {
   });
 }
 
+function filterGBLastDays(rows, n) {
+  if (!rows.length) return rows;
+  var latest = new Date(rows[rows.length - 1].date);
+  if (isNaN(latest.getTime())) return rows;
+  var cutoff = new Date(latest);
+  cutoff.setDate(cutoff.getDate() - n);
+  return rows.filter(function(r) {
+    var d = new Date(r.date);
+    return !isNaN(d.getTime()) && d >= cutoff;
+  });
+}
+
 function setGBRange(range, btn) {
   document.querySelectorAll('.grbtn').forEach(function(b){ b.classList.remove('active'); });
   btn.classList.add('active');
-  var subset = range === 'all' ? allGBRows : filterLastDays(allGBRows, Number(range));
+  var subset = range === 'all' ? allGBRows : filterGBLastDays(allGBRows, Number(range));
   buildGBChart(subset, allRows);
+}
+
+function toEastern(utcStr) {
+  if (!utcStr) return '';
+  var d = new Date(utcStr.indexOf('Z') === -1 && utcStr.indexOf('+') === -1 ? utcStr + 'Z' : utcStr);
+  if (isNaN(d.getTime())) return utcStr.slice(0, 16);
+  return d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function buildSparklineSVG(ticks) {
+  if (!ticks || ticks.length < 2) return '';
+  var prices = ticks.map(function(t){ return t.price; });
+  var minP = Math.min.apply(null, prices);
+  var maxP = Math.max.apply(null, prices);
+  if (maxP - minP < 0.001) { minP -= 0.001; maxP += 0.001; }
+  var range = maxP - minP;
+  var W = 500, H = 46, PX = 10, PY = 10;
+  var n = ticks.length;
+  var pts = ticks.map(function(t, i) {
+    var x = PX + (n === 1 ? (W - PX*2)/2 : i/(n-1)*(W - PX*2));
+    var y = PY + (1 - (t.price - minP)/range) * (H - PY*2);
+    return { x: x.toFixed(1), y: y.toFixed(1), price: t.price, time: t.timeStr };
+  });
+  var line = pts.map(function(p){ return p.x+','+p.y; }).join(' ');
+  var dots = pts.map(function(p){
+    return '<circle cx="'+p.x+'" cy="'+p.y+'" r="3.5" fill="#27ae60" stroke="#1a1a1a" stroke-width="1.5"><title>'+p.time+' — $'+p.price.toFixed(3)+'</title></circle>';
+  }).join('');
+  var t0 = ticks[0].timeStr, t1 = ticks[n-1].timeStr;
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:46px;display:block;" preserveAspectRatio="none">' +
+    '<polyline points="'+line+'" fill="none" stroke="#27ae60" stroke-width="1.5" stroke-opacity="0.55"/>' +
+    dots +
+    '<text x="'+PX+'" y="'+(H-1)+'" fill="#444" font-size="9" font-family="sans-serif">'+t0+'</text>' +
+    '<text x="'+(W-PX)+'" y="'+(H-1)+'" fill="#444" font-size="9" font-family="sans-serif" text-anchor="end">'+t1+'</text>' +
+  '</svg>';
 }
 
 function renderLiveWidget(intradayRows) {
   var el = document.getElementById('live-gb-container');
   if (!el || !intradayRows || !intradayRows.length) return;
-  var latest   = intradayRows[intradayRows.length - 1];
-  var live     = parseFloat(latest.live_ticking_avg);
-  var vsYday   = parseFloat(latest.live_vs_yesterday);
-  var trend    = (latest.today_trend || '').toLowerCase();
-  var updated  = (latest.last_updated_at || latest.scraped_at_utc || '').slice(0, 16);
-  var vsCls    = vsYday > 0.0005 ? 'up' : vsYday < -0.0005 ? 'down' : 'flat';
-  var vsStr    = (vsYday >= 0 ? '+' : '') + '$' + Math.abs(vsYday).toFixed(3);
-  var arrow    = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '→';
+  var latest    = intradayRows[intradayRows.length - 1];
+  var live      = parseFloat(latest.live_ticking_avg);
+  var vsYday    = parseFloat(latest.live_vs_yesterday);
+  var trend     = (latest.today_trend || '').toLowerCase();
+  var updatedET = toEastern(latest.scraped_at_utc || latest.last_updated_at || '');
+  var vsCls     = vsYday > 0.0005 ? 'up' : vsYday < -0.0005 ? 'down' : 'flat';
+  var vsStr     = (vsYday >= 0 ? '+' : '') + '$' + Math.abs(vsYday).toFixed(3);
+  var arrow     = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '→';
+  var trendLabel = trend === 'up' ? 'Rising' : trend === 'down' ? 'Falling' : trend ? trend : '—';
+
+  // Today's ticks in ET — group by the ET calendar date of the latest snapshot
+  var latestDateET = (function() {
+    var d = new Date((latest.scraped_at_utc || '') + 'Z');
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+  })();
+  var todayTicks = intradayRows.filter(function(r) {
+    var d = new Date((r.scraped_at_utc || '') + 'Z');
+    return !isNaN(d.getTime()) && d.toLocaleDateString('en-US', { timeZone: 'America/New_York' }) === latestDateET;
+  }).map(function(r) {
+    var d = new Date((r.scraped_at_utc || '') + 'Z');
+    var timeStr = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+    return { price: parseFloat(r.live_ticking_avg), timeStr: timeStr };
+  });
+  var sparkline = buildSparklineSVG(todayTicks);
+
   el.innerHTML =
     '<div class="live-gb">' +
       '<div>' +
         '<div class="gb-label">GasBuddy Live (crowdsourced)</div>' +
         '<div class="gb-price ' + vsCls + '">$' + live.toFixed(3) + '</div>' +
         '<div style="font-size:12px;color:#666;margin-top:4px;">vs yesterday: <span class="' + vsCls + '">' + vsStr + '</span></div>' +
-        '<div class="gb-updated">Updated ' + updated + ' UTC</div>' +
+        '<div class="gb-updated">Snapshot ' + updatedET + ' ET</div>' +
       '</div>' +
-      '<div class="change-chip" style="min-width:100px;">' +
-        '<div class="lbl">Today\'s trend</div>' +
-        '<div class="val ' + vsCls + '">' + arrow + ' ' + (trend || '—') + '</div>' +
+      '<div class="change-chip" style="min-width:120px;">' +
+        '<div class="lbl">Live direction</div>' +
+        '<div class="val ' + vsCls + '">' + arrow + ' ' + trendLabel + '</div>' +
+        '<div style="font-size:10px;color:#555;margin-top:2px;">GasBuddy reported</div>' +
       '</div>' +
+      (sparkline ? '<div style="flex:0 0 100%;padding-top:6px;border-top:1px solid #222;margin-top:4px;">' + sparkline + '</div>' : '') +
     '</div>';
 }
 
