@@ -261,13 +261,11 @@ def main():
         aaa_p = aaa.get(d)
         gb_d  = gb_deltas.get(d)
         aaa_d = aaa_deltas.get(d)
-        print(
-            f"  {d}  "
-            f"GB={gb_p:.3f if gb_p is not None else '—':>6}  "
-            f"(Δ{gb_d:+.3f if gb_d is not None else '—':>6})  "
-            f"AAA={aaa_p:.3f if aaa_p is not None else '—':>6}  "
-            f"(Δ{aaa_d:+.3f if aaa_d is not None else '—':>6})"
-        )
+        gb_str   = f"{gb_p:.3f}"  if gb_p  is not None else "—"
+        aaa_str  = f"{aaa_p:.3f}" if aaa_p is not None else "—"
+        gb_d_str  = f"{gb_d:+.3f}"  if gb_d  is not None else "—"
+        aaa_d_str = f"{aaa_d:+.3f}" if aaa_d is not None else "—"
+        print(f"  {d}  GB={gb_str:>7}  (d{gb_d_str:>7})  AAA={aaa_str:>7}  (d{aaa_d_str:>7})")
 
     # --- Build enriched JSON for dashboard --------------------------------
     latest_gb_date  = max(gb)  if gb  else None
