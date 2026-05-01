@@ -135,6 +135,7 @@ var allGBRows      = [];
 var chart          = null;
 var futChart       = null;
 var gbChart        = null;
+var sparkChart     = null;
 var dlRows         = [];
 
 // ── Parse ──────────────────────────────────────────────────────────────────
@@ -445,14 +446,35 @@ function buildGBChart(gbRows, aaaRows) {
     return { x: toISO(r.price_date), y: toNum(r.current) };
   }).filter(function(p){ return p.y !== null; });
 
+  // Build AAA map for gap: date -> price
+  var aaaMap = {};
+  aaaRows.forEach(function(r) {
+    var iso = toISO(r.price_date), p = toNum(r.current);
+    if (iso && p !== null) aaaMap[iso] = p;
+  });
+  // GB[d] minus AAA[d+1]: positive = GB running above what AAA will report tomorrow
+  var gapPts = gbRows.map(function(r) {
+    var gbP = parseFloat(r.national_avg_regular);
+    if (isNaN(gbP)) return null;
+    var d = new Date(r.date + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    var nextISO = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    var aaaNext = aaaMap[nextISO];
+    if (aaaNext == null) return null;
+    return { x: r.date, y: Math.round((gbP - aaaNext) * 1000) / 1000 };
+  }).filter(function(p){ return p !== null; });
+
   gbChart = new Chart(ctx, {
     type: 'line',
     data: {
       datasets: [
         { label: 'GasBuddy', data: gbPts, borderColor: '#27ae60', backgroundColor: 'rgba(39,174,96,0.06)',
-          borderWidth: 2, pointRadius: 0, pointHitRadius: 20, fill: true, tension: 0.3, order: 2 },
+          borderWidth: 2, pointRadius: 0, pointHitRadius: 20, fill: true, tension: 0.3, order: 2, yAxisID: 'y' },
         { label: 'AAA', data: aaaPts, borderColor: '#f39c12', backgroundColor: 'transparent',
-          borderWidth: 2, pointRadius: 0, pointHitRadius: 20, fill: false, tension: 0.3, order: 1 }
+          borderWidth: 2, pointRadius: 0, pointHitRadius: 20, fill: false, tension: 0.3, order: 1, yAxisID: 'y' },
+        { label: 'GB − next-day AAA', data: gapPts, borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.07)',
+          borderWidth: 1.5, pointRadius: 0, pointHitRadius: 20, fill: true, tension: 0.3, order: 3,
+          borderDash: [4, 3], yAxisID: 'y1' }
       ]
     },
     options: {
@@ -460,11 +482,15 @@ function buildGBChart(gbRows, aaaRows) {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: true, labels: { color: '#888', boxWidth: 16, font: { size: 11 } } },
-        tooltip: { callbacks: { label: function(c){ return c.dataset.label + ': $' + c.parsed.y.toFixed(3); } } }
+        tooltip: { callbacks: { label: function(c){
+          if (c.datasetIndex === 2) return c.dataset.label + ': ' + (c.parsed.y >= 0 ? '+' : '') + '$' + c.parsed.y.toFixed(3);
+          return c.dataset.label + ': $' + c.parsed.y.toFixed(3);
+        }}}
       },
       scales: {
         x: { type: 'time', time: { unit: 'month', tooltipFormat: 'MMM d, yyyy', displayFormats: { month: 'MMM yy' } }, ticks: { color: '#666', maxTicksLimit: 8 }, grid: { color: '#1e1e1e' } },
-        y: { ticks: { color: '#666', callback: function(v){ return '$' + v.toFixed(2); } }, grid: { color: '#1e1e1e' } }
+        y:  { position: 'left',  ticks: { color: '#666', callback: function(v){ return '$' + v.toFixed(2); } }, grid: { color: '#1e1e1e' } },
+        y1: { position: 'right', ticks: { color: '#9b59b6', callback: function(v){ return (v >= 0 ? '+' : '') + '$' + v.toFixed(2); } }, grid: { drawOnChartArea: false } }
       }
     }
   });
@@ -485,8 +511,9 @@ function filterGBLastDays(rows, n) {
 function setGBRange(range, btn) {
   document.querySelectorAll('.grbtn').forEach(function(b){ b.classList.remove('active'); });
   btn.classList.add('active');
-  var subset = range === 'all' ? allGBRows : filterGBLastDays(allGBRows, Number(range));
-  buildGBChart(subset, allRows);
+  var gbSubset  = range === 'all' ? allGBRows : filterGBLastDays(allGBRows, Number(range));
+  var aaaSubset = range === 'all' ? allRows   : filterLastDays(allRows, Number(range));
+  buildGBChart(gbSubset, aaaSubset);
 }
 
 function toEastern(utcStr) {
@@ -496,47 +523,17 @@ function toEastern(utcStr) {
   return d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-function buildSparklineSVG(ticks) {
-  if (!ticks || ticks.length < 2) return '';
-  var prices = ticks.map(function(t){ return t.price; });
-  var minP = Math.min.apply(null, prices);
-  var maxP = Math.max.apply(null, prices);
-  if (maxP - minP < 0.001) { minP -= 0.001; maxP += 0.001; }
-  var range = maxP - minP;
-  var W = 500, H = 46, PX = 10, PY = 10;
-  var n = ticks.length;
-  var pts = ticks.map(function(t, i) {
-    var x = PX + (n === 1 ? (W - PX*2)/2 : i/(n-1)*(W - PX*2));
-    var y = PY + (1 - (t.price - minP)/range) * (H - PY*2);
-    return { x: x.toFixed(1), y: y.toFixed(1), price: t.price, time: t.timeStr };
-  });
-  var line = pts.map(function(p){ return p.x+','+p.y; }).join(' ');
-  var dots = pts.map(function(p){
-    return '<circle cx="'+p.x+'" cy="'+p.y+'" r="3.5" fill="#27ae60" stroke="#1a1a1a" stroke-width="1.5"><title>'+p.time+' — $'+p.price.toFixed(3)+'</title></circle>';
-  }).join('');
-  var t0 = ticks[0].timeStr, t1 = ticks[n-1].timeStr;
-  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:46px;display:block;" preserveAspectRatio="none">' +
-    '<polyline points="'+line+'" fill="none" stroke="#27ae60" stroke-width="1.5" stroke-opacity="0.55"/>' +
-    dots +
-    '<text x="'+PX+'" y="'+(H-1)+'" fill="#444" font-size="9" font-family="sans-serif">'+t0+'</text>' +
-    '<text x="'+(W-PX)+'" y="'+(H-1)+'" fill="#444" font-size="9" font-family="sans-serif" text-anchor="end">'+t1+'</text>' +
-  '</svg>';
-}
-
 function renderLiveWidget(intradayRows) {
   var el = document.getElementById('live-gb-container');
   if (!el || !intradayRows || !intradayRows.length) return;
   var latest    = intradayRows[intradayRows.length - 1];
   var live      = parseFloat(latest.live_ticking_avg);
   var vsYday    = parseFloat(latest.live_vs_yesterday);
-  var trend     = (latest.today_trend || '').toLowerCase();
   var updatedET = toEastern(latest.scraped_at_utc || latest.last_updated_at || '');
   var vsCls     = vsYday > 0.0005 ? 'up' : vsYday < -0.0005 ? 'down' : 'flat';
   var vsStr     = (vsYday >= 0 ? '+' : '') + '$' + Math.abs(vsYday).toFixed(3);
-  var arrow     = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '→';
-  var trendLabel = trend === 'up' ? 'Rising' : trend === 'down' ? 'Falling' : trend ? trend : '—';
 
-  // Today's ticks in ET — group by the ET calendar date of the latest snapshot
+  // Today's ticks grouped by ET calendar date of the latest snapshot
   var latestDateET = (function() {
     var d = new Date((latest.scraped_at_utc || '') + 'Z');
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
@@ -546,26 +543,61 @@ function renderLiveWidget(intradayRows) {
     return !isNaN(d.getTime()) && d.toLocaleDateString('en-US', { timeZone: 'America/New_York' }) === latestDateET;
   }).map(function(r) {
     var d = new Date((r.scraped_at_utc || '') + 'Z');
-    var timeStr = d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
-    return { price: parseFloat(r.live_ticking_avg), timeStr: timeStr };
+    return { ts: d, price: parseFloat(r.live_ticking_avg) };
   });
-  var sparkline = buildSparklineSVG(todayTicks);
+
+  var hasSpark = todayTicks.length >= 2;
 
   el.innerHTML =
     '<div class="live-gb">' +
-      '<div>' +
+      '<div style="flex:0 0 auto;">' +
         '<div class="gb-label">GasBuddy Live (crowdsourced)</div>' +
         '<div class="gb-price ' + vsCls + '">$' + live.toFixed(3) + '</div>' +
         '<div style="font-size:12px;color:#666;margin-top:4px;">vs yesterday: <span class="' + vsCls + '">' + vsStr + '</span></div>' +
         '<div class="gb-updated">Snapshot ' + updatedET + ' ET</div>' +
       '</div>' +
-      '<div class="change-chip" style="min-width:120px;">' +
-        '<div class="lbl">Live direction</div>' +
-        '<div class="val ' + vsCls + '">' + arrow + ' ' + trendLabel + '</div>' +
-        '<div style="font-size:10px;color:#555;margin-top:2px;">GasBuddy reported</div>' +
-      '</div>' +
-      (sparkline ? '<div style="flex:0 0 100%;padding-top:6px;border-top:1px solid #222;margin-top:4px;">' + sparkline + '</div>' : '') +
+      (hasSpark
+        ? '<div style="flex:1;min-width:160px;height:80px;position:relative;"><canvas id="intradaySparkCanvas"></canvas></div>'
+        : '') +
     '</div>';
+
+  if (hasSpark) {
+    if (sparkChart) { try { sparkChart.destroy(); } catch(e) {} sparkChart = null; }
+    var ctx = document.getElementById('intradaySparkCanvas');
+    var sparkPts = todayTicks.map(function(t) { return { x: t.ts.toISOString(), y: t.price }; });
+    sparkChart = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [{
+        data: sparkPts,
+        borderColor: '#27ae60',
+        backgroundColor: 'rgba(39,174,96,0.08)',
+        borderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointHitRadius: 16,
+        fill: true,
+        tension: 0.35
+      }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: {
+            title: function(items) {
+              var d = new Date(items[0].parsed.x);
+              return d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }) + ' ET';
+            },
+            label: function(c) { return '$' + c.parsed.y.toFixed(3); }
+          }}
+        },
+        scales: {
+          x: { type: 'time', display: false },
+          y: { display: false }
+        }
+      }
+    });
+  }
 }
 
 function renderSignalCard(lagData) {
