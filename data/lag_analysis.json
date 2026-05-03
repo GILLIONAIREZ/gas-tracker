@@ -1,44 +1,44 @@
 {
-  "generated_at": "2026-05-02T10:02:32.278232",
-  "latest_gb_price": 4.447,
-  "latest_gb_date": "2026-05-01",
-  "latest_aaa_price": 4.433,
-  "latest_aaa_date": "2026-05-02",
-  "gb_aaa_spread": 0.054999999999999716,
-  "overlap_days": 87,
+  "generated_at": "2026-05-03T08:00:14.602839",
+  "latest_gb_price": 4.451,
+  "latest_gb_date": "2026-05-02",
+  "latest_aaa_price": 4.446,
+  "latest_aaa_date": "2026-05-03",
+  "gb_aaa_spread": 0.017999999999999794,
+  "overlap_days": 89,
   "min_intraday_days_threshold": 14,
-  "intraday_days_available": 4,
+  "intraday_days_available": 5,
   "top_signal": {
     "feature": "gb_delta_lag_0",
-    "pearson_r": 0.8832870303910811,
-    "current_value": 0.03500000000000014,
+    "pearson_r": 0.8829057555167873,
+    "current_value": 0.0039999999999995595,
     "implied_aaa_direction": "up"
   },
   "ranked_features": [
     {
       "feature": "gb_delta_lag_0",
-      "pearson_r": 0.8832870303910811,
-      "n": 68
-    },
-    {
-      "feature": "gb_minus_aaa_spread",
-      "pearson_r": 0.8609821343416041,
-      "n": 84
-    },
-    {
-      "feature": "gb_delta_lag_1",
-      "pearson_r": 0.423074992210717,
-      "n": 68
-    },
-    {
-      "feature": "gb_delta_lag_6",
-      "pearson_r": 0.33406642014257,
+      "pearson_r": 0.8829057555167873,
       "n": 70
     },
     {
-      "feature": "gb_delta_lag_3",
-      "pearson_r": 0.3237768247151576,
+      "feature": "gb_minus_aaa_spread",
+      "pearson_r": 0.8603000489908358,
+      "n": 86
+    },
+    {
+      "feature": "gb_delta_lag_1",
+      "pearson_r": 0.4198135237438647,
+      "n": 70
+    },
+    {
+      "feature": "gb_delta_lag_6",
+      "pearson_r": 0.3355014533885093,
       "n": 72
+    },
+    {
+      "feature": "gb_delta_lag_5",
+      "pearson_r": 0.3122407714122846,
+      "n": 74
     },
     {
       "feature": "gb_delta_lag_4",
@@ -46,19 +46,19 @@
       "n": 73
     },
     {
-      "feature": "gb_delta_lag_5",
-      "pearson_r": 0.3042343794292072,
+      "feature": "gb_delta_lag_7",
+      "pearson_r": 0.3069212765143705,
+      "n": 69
+    },
+    {
+      "feature": "gb_delta_lag_3",
+      "pearson_r": 0.30300179899016977,
       "n": 73
     },
     {
-      "feature": "gb_delta_lag_7",
-      "pearson_r": 0.30015314921904174,
-      "n": 67
-    },
-    {
       "feature": "gb_delta_lag_2",
-      "pearson_r": 0.2610905510096542,
-      "n": 70
+      "pearson_r": 0.22783507711897655,
+      "n": 72
     }
   ]
 }
